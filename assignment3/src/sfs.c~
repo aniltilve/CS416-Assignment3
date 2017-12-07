@@ -29,8 +29,6 @@
 
 #include "log.h"
 
-//number of blocks
-#define NUM_BLOCK DISK/BLOCK_SIZE
 
 ///////////////////////////////////////////////////////////
 //

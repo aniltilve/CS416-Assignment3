@@ -26,12 +26,7 @@
 //inode structure
 struct inode{
 	int owner;
-	int type;
-	int lastModified;
-	int lastAccess;
-	int permissions;
-	int size;
-	int blockPtr;
+	
 };
 
 //superblock structure
