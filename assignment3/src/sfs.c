@@ -32,6 +32,8 @@
 //number of blocks
 #define NUM_BLOCK DISK/BLOCK_SIZE
 
+char blockBitMap[NUM_BLOCK];
+char inodeBitMap[NUM_BLOCK];
 ///////////////////////////////////////////////////////////
 //
 // Prototypes for all these functions, and the C-style comments,
@@ -53,6 +55,12 @@ void *sfs_init(struct fuse_conn_info *conn)
     fprintf(stderr, "in bb-init\n");
     log_msg("\nsfs_init()\n");
     
+    //initializes the bitmaps for inodes and data blocks
+    int i;//counter in for loops
+    for(i=0; i<NUM_BLOCK ;i++){
+    	blockBitMap[i]=1;//one is free
+    	inodeBitMap[i]=1;
+    }
     log_conn(conn);
     log_fuse_context(fuse_get_context());
 
