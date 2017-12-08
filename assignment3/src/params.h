@@ -34,12 +34,12 @@
 //inode structure
 struct inode{
     unsigned int inode_mode;    //type of file (read, write, execute)
-	unsigned int inode_uid;     //user id
-	unsigned int inode_gid;     //group id
-	unsigned int inode_atime;   //access
-	unsigned int inode_ctime;   //changed
-	unsigned int inode_mtime;   //modify
-	unsigned int inode_links;   //links to file
+    unsigned int inode_uid;     //user id
+    unsigned int inode_gid;     //group id
+    unsigned int inode_atime;   //access
+    unsigned int inode_ctime;   //changed
+    unsigned int inode_mtime;   //modify
+    unsigned int inode_links;   //links to file
     unsigned int inode_size;    //size of file
     unsigned int inode_blocks;  //blocks number
     unsigned int inode_addresses[INODE_BLOCK_NUM];   //Physical block addresses of inodes (0-9)
@@ -48,13 +48,13 @@ struct inode{
 
 //superblock structure
 struct superBlock{
-	unsigned int fsid;                  //filesystem ID
-	unsigned int blocks;                //total number of blocks
+    unsigned int fsid;                  //filesystem ID
+    unsigned int blocks;                //total number of blocks
     unsigned int root;                  //inode number of root directory
-	unsigned int inode_start;           //starting index of inode
-	unsigned int inode_blocks;          //number of inode blocks
-	unsigned int inode_bitmap_start;    //starting index of inode bitmap
-	unsigned int inode_bitmap_blocks;   //number of inode bitmap blocks
+    unsigned int inode_start;           //starting index of inode
+    unsigned int inode_blocks;          //number of inode blocks
+    unsigned int inode_bitmap_start;    //starting index of inode bitmap
+    unsigned int inode_bitmap_blocks;   //number of inode bitmap blocks
     unsigned int data_start;            //starting index of data
     unsigned int data_blocks;           //number of data blocks
 };
