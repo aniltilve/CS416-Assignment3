@@ -29,11 +29,6 @@
 
 #include "log.h"
 
-//number of blocks
-#define NUM_BLOCK DISK/BLOCK_SIZE
-
-char blockBitMap[NUM_BLOCK];
-char inodeBitMap[NUM_BLOCK];
 ///////////////////////////////////////////////////////////
 //
 // Prototypes for all these functions, and the C-style comments,
@@ -55,14 +50,50 @@ void *sfs_init(struct fuse_conn_info *conn)
     fprintf(stderr, "in bb-init\n");
     log_msg("\nsfs_init()\n");
     
-    //initializes the bitmaps for inodes and data blocks
-    int i;//counter in for loops
-    for(i=0; i<NUM_BLOCK ;i++){
-    	blockBitMap[i]=1;//one is free
-    	inodeBitMap[i]=1;
-    }
+    
     log_conn(conn);
     log_fuse_context(fuse_get_context());
+    
+    char buffer[BLOCK_SIZE];
+    int ret; //bytes retrieved
+    struct superBlock sb;
+    struct inode ino;
+
+    memset(buffer, 0, BLOCK_SIZE);
+    disk_open(SFS_DATA->diskfile);
+    if((ret=block_read(0, buffer)) <= 0){
+        sb.fsid = FS_ID;
+        sb.blocks = NUMBLOCKS;
+        sb.root = 0;
+        sb.inode_start = (unsigned int)(sizeof(struct superblock)/BLOCK_SIZE)+1;
+        sb.inode_blocks = INODE_NUM/I_NUM_PER_BLOCK;
+        sb.inode_bitmap_start = sb.inode_start + sb.inode_blocks;
+        sb.inode_bitmap_blocks = 1;
+        sb.data_start = sb.inode_bitmap_start + sb.inode_bitmap_blocks;
+        sb.data_blocks = 0;
+
+        ino.inode_mode = S_IFDIR | S_IRWXU | S_IRWXG;
+        ino.inode_uid = getuid();
+        ino.inode_gid = getgid();
+        ino.inode_atime = time(NULL);
+        ino.inode_ctime = ino.inode_atime;
+        ino.inode_mtime = ino.inode_atime;
+        ino.inode_links = 1;
+        ino.inode_size = 0;
+        ino.inode_blocks = 0;
+
+        memset((void*)buffer, 0, BLOCK_SIZE);
+        memcpy((void*)buffer, (void*)&sb, sizeof(struct superBlock));
+        block_write(0, (void*) buffer);
+        memset((void*)buffer, 0, BLOCK_SIZE);
+        memcpy((void*)buffer, (void*)&ino, sizeof(struct inode));
+        block_write(sb.inode_start, (void*)buffer);
+    }else{
+        memcpy((void*)&sb, (void*)buffer, sizeof(struct suberBlock));
+        if(sb.fsid != FS_ID){
+            //not our filesystem, overwrite?
+        }
+    }
 
     return SFS_DATA;
 }
@@ -76,6 +107,7 @@ void *sfs_init(struct fuse_conn_info *conn)
  */
 void sfs_destroy(void *userdata)
 {
+    disk_close();
     log_msg("\nsfs_destroy(userdata=0x%08x)\n", userdata);
 }
 
