@@ -65,7 +65,7 @@ void *sfs_init(struct fuse_conn_info *conn)
         sb.fsid = FS_ID;
         sb.blocks = NUMBLOCKS;
         sb.root = 0;
-        sb.inode_start = (unsigned int)(sizeof(struct superblock)/BLOCK_SIZE)+1;
+        sb.inode_start = (unsigned int)(sizeof(struct superBlock)/BLOCK_SIZE)+1;
         sb.inode_blocks = INODE_NUM/I_NUM_PER_BLOCK;
         sb.inode_bitmap_start = sb.inode_start + sb.inode_blocks;
         sb.inode_bitmap_blocks = 1;
@@ -122,9 +122,70 @@ int sfs_getattr(const char *path, struct stat *statbuf)
     int retstat = 0;
     char fpath[PATH_MAX];
     
-    log_msg("\nsfs_getattr(path=\"%s\", statbuf=0x%08x)\n",
-	  path, statbuf);
-    
+    log_msg("\nsfs_getattr(path=\"%s\", statbuf=0x%08x)\n", path, statbuf);
+
+	char buffer[BLOCK_SIZE];
+	char *data;
+	struct dirent *entry;
+	struct superBlock sb;
+	struct inode root_ino, ino;
+	int num_entries, i;
+
+	memset(buffer, 0, BLOCK_SIZE);
+	block_read(0, buffer);
+	memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
+	memset(buffer, 0, BLOCK_SIZE);
+	block_read(sb.inode_start, buffer);
+	memcpy((void*)&root_ino, (void*)buffer, sizeof(struct inode));
+
+	if(strcmp("/", path) == 0){
+		statbuf->st_mode = root_ino.inode_mode;
+		statbuf->st_uid = root_ino.inode_uid;
+		statbuf->st_gid = root_ino.inode_gid;
+		statbuf->st_rdev = 0;	//not part of our implementation
+		statbuf->st_atime = root_ino.inode_atime;
+		statbuf->st_ctime = root_ino.inode_ctime;
+		statbuf->st_mtime = root_ino.inode_mtime;
+		statbuf->st_nlink = root_ino.inode_links;
+		statbuf->st_blocks = root_ino.inode_blocks;
+		statbuf->st_size = root_ino.inode_size;
+	}else{
+		data = (char*) malloc(BLOCK_SIZE * root_ino.inode_blocks);
+
+		for(i=0;(unsigned int) i != root_ino.inode_blocks; i++){
+			memset(buffer, 0, BLOCK_SIZE);
+			block_read(root_ino.inode_addresses[i], buffer);
+			memcpy((void*)&data[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+		}
+
+		num_entries = root_ino.inode_size/sizeof(struct dirent);
+		entry = (struct dirent*) data;
+		for(i=0; i != num_entries; i++){
+			if(strcmp(&path[1], entry[i].d_name) == 0){
+				//get this inode
+				memset(buffer, 0, BLOCK_SIZE);
+				block_read(sb.inode_start+(unsigned int)((entry[i].d_ino)/I_NUM_PER_BLOCK), buffer);
+				memcpy((void*)&ino, (void*)&((struct inode *)buffer)[(entry[i].d_ino)%I_NUM_PER_BLOCK], sizeof(struct inode));
+				statbuf->st_mode = root_ino.inode_mode;
+				statbuf->st_uid = root_ino.inode_uid;
+				statbuf->st_gid = root_ino.inode_gid;
+				statbuf->st_rdev = 0;	//not part of our implementation
+				statbuf->st_atime = root_ino.inode_atime;
+				statbuf->st_ctime = root_ino.inode_ctime;
+				statbuf->st_mtime = root_ino.inode_mtime;
+				statbuf->st_nlink = root_ino.inode_links;
+				statbuf->st_blocks = root_ino.inode_blocks;
+				statbuf->st_size = root_ino.inode_size;
+				break;
+			}
+		}
+		if(i == num_entries){
+			statbuf->st_mode = S_IFREG | S_IRWXU | S_IRWXG;
+		}
+		free(data);
+		
+	}
+
     return retstat;
 }
 
