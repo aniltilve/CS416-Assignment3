@@ -56,21 +56,22 @@ void *sfs_init(struct fuse_conn_info *conn)
     
     char buffer[BLOCK_SIZE];
     int ret; //bytes retrieved
-    struct superBlock sb;
+    struct superBlock sup_blk;
     struct inode ino;
 
     memset(buffer, 0, BLOCK_SIZE);
     disk_open(SFS_DATA->diskfile);
+
     if((ret=block_read(0, buffer)) <= 0){
-        sb.fsid = FS_ID;
-        sb.blocks = NUMBLOCKS;
-        sb.root = 0;
-        sb.inode_start = (unsigned int)(sizeof(struct superBlock)/BLOCK_SIZE)+1;
-        sb.inode_blocks = INODE_NUM/I_NUM_PER_BLOCK;
-        sb.inode_bitmap_start = sb.inode_start + sb.inode_blocks;
-        sb.inode_bitmap_blocks = 1;
-        sb.data_start = sb.inode_bitmap_start + sb.inode_bitmap_blocks;
-        sb.data_blocks = 0;
+        sup_blk.fsid = FS_ID;
+        sup_blk.blocks = NUMBLOCKS;
+        sup_blk.root = 0;
+        sup_blk.inode_start = (unsigned int)(sizeof(struct superBlock)/BLOCK_SIZE)+1;
+        sup_blk.inode_blocks = INODE_NUM/I_NUM_PER_BLOCK;
+        sup_blk.inode_bitmap_start = sup_blk.inode_start + sup_blk.inode_blocks;
+        sup_blk.inode_bitmap_blocks = 1;
+        sup_blk.data_start = sup_blk.inode_bitmap_start + sup_blk.inode_bitmap_blocks;
+        sup_blk.data_blocks = 0;
 
         ino.inode_mode = S_IFDIR | S_IRWXU | S_IRWXG;
         ino.inode_uid = getuid();
@@ -83,14 +84,14 @@ void *sfs_init(struct fuse_conn_info *conn)
         ino.inode_blocks = 0;
 
         memset((void*)buffer, 0, BLOCK_SIZE);
-        memcpy((void*)buffer, (void*)&sb, sizeof(struct superBlock));
+        memcpy((void*)buffer, (void*)&sup_blk, sizeof(struct superBlock));
         block_write(0, (void*) buffer);
         memset((void*)buffer, 0, BLOCK_SIZE);
         memcpy((void*)buffer, (void*)&ino, sizeof(struct inode));
-        block_write(sb.inode_start, (void*)buffer);
+        block_write(sup_blk.inode_start, (void*)buffer);
     }else{
-        memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
-        if(sb.fsid != FS_ID){
+        memcpy((void*)&sup_blk, (void*)buffer, sizeof(struct superBlock));
+        if(sup_blk.fsid != FS_ID){
             //not our filesystem, overwrite?
         }
     }
@@ -127,15 +128,15 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 	char buffer[BLOCK_SIZE];
 	char *info;
 	struct dirent *entry;
-	struct superBlock sb;
+	struct superBlock sup_blk;
 	struct inode root_ino, ino;
-	int num_entries, i;
+	int num_entries, idx;
 
 	memset(buffer, 0, BLOCK_SIZE);
 	block_read(0, buffer);
-	memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
+	memcpy((void*)&sup_blk, (void*)buffer, sizeof(struct superBlock));
 	memset(buffer, 0, BLOCK_SIZE);
-	block_read(sb.inode_start, buffer);
+	block_read(sup_blk.inode_start, buffer);
 	memcpy((void*)&root_ino, (void*)buffer, sizeof(struct inode));
 
 	if(strcmp("/", path) == 0){
@@ -152,20 +153,20 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 	}else{
 		info = (char*) malloc(BLOCK_SIZE * root_ino.inode_blocks);
 
-		for(i=0;(unsigned int) i != root_ino.inode_blocks; i++){
+		for(i = 0; (unsigned int)idx != root_ino.inode_blocks; idx++){
 			memset(buffer, 0, BLOCK_SIZE);
-			block_read(root_ino.inode_addresses[i], buffer);
+			block_read(root_ino.inode_addresses[idx], buffer);
 			memcpy((void*)&info[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
 		}
 
 		num_entries = root_ino.inode_size/sizeof(struct dirent);
 		entry = (struct dirent*) info;
-		for(i=0; i != num_entries; i++){
-			if(strcmp(&path[1], entry[i].d_name) == 0){
+		for(idx = 0; idx != num_entries; idx++){
+			if(strcmp(&path[1], entry[idx].d_name) == 0){
 				//get this inode
 				memset(buffer, 0, BLOCK_SIZE);
-				block_read(sb.inode_start+(unsigned int)((entry[i].d_ino)/I_NUM_PER_BLOCK), buffer);
-				memcpy((void*)&ino, (void*)&((struct inode *)buffer)[(entry[i].d_ino)%I_NUM_PER_BLOCK], sizeof(struct inode));
+				block_read(sup_blk.inode_start+(unsigned int)((entry[idx].d_ino)/I_NUM_PER_BLOCK), buffer);
+				memcpy((void*)&ino, (void*)&((struct inode *)buffer)[(entry[idx].d_ino)%I_NUM_PER_BLOCK], sizeof(struct inode));
 				statbuf->st_mode = root_ino.inode_mode;
 				statbuf->st_uid = root_ino.inode_uid;
 				statbuf->st_gid = root_ino.inode_gid;
@@ -179,9 +180,9 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 				break;
 			}
 		}
-		if(i == num_entries){
+		if(idx == num_entries)
 			statbuf->st_mode = S_IFREG | S_IRWXU | S_IRWXG;
-		}
+
 		free(info);
 		
 	}
@@ -373,35 +374,35 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 {
     int retstat = 0;
    
-    struct superBlock sb;
+    struct superBlock sup_blk;
     struct inode ino;
     struct dirent* entry;
     char buffer[BLOCK_SIZE], *info;
-    int num_entries, i;
+    int num_entries, idx;
 
     log_msg("\nreaddir begins\n");
     memset(buffer, 0, BLOCK_SIZE);
     block_read(0, buffer);
-    memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
+    memcpy((void*)&sup_blk, (void*)buffer, sizeof(struct superBlock));
 
-    block_read(sb.inode_start, buffer);
+    block_read(sup_blk.inode_start, buffer);
     memcpy((void*)&ino, (void*)buffer, sizeof(struct inode));
 
     info = malloc(ino.inode_blocks * BLOCK_SIZE);
     memset(info, 0, ino.inode_blocks * BLOCK_SIZE);
-    for(i=0; i<ino.inode_blocks; i++){
+    for(idx = 0; idx < ino.inode_blocks; idx++){
         block_read(ino.inode_addresses[i], buffer);
-        memcpy((void*)&info[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+        memcpy((void*)&info[BLOCK_SIZE * idx], (void*)buffer, BLOCK_SIZE);
     }
     num_entries = ino.inode_size / sizeof(struct dirent);
     entry = (struct dirent*) info;
 
 
-    for(i=0; i<num_entries; i++){
-        if(filler(buf, entry[i].d_name, NULL, 0)!=0 || i+1 == num_entries){
+    for(idx = 0; idx < num_entries; idx++){
+        if(filler(buf, entry[idx].d_name, NULL, 0)!=0 || idx + 1 == num_entries)
             break;
-        }
     }
+
     free(info);
     return retstat;
 }
