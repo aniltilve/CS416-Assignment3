@@ -50,31 +50,31 @@
 //inode structure
 typedef struct Inode_t
 {
-    unsigned int inode_mode;    //type of file (read, write, execute)
-    unsigned int inode_uid;     //user id
-    unsigned int inode_gid;     //group id
-    unsigned int inode_atime;   //access
-    unsigned int inode_ctime;   //changed
-    unsigned int inode_mtime;   //modify
-    unsigned int inode_links;   //links to file
-    unsigned int inode_size;    //size of file
-    unsigned int inode_blocks;  //blocks number
-    unsigned int inode_addresses[INODE_BLOCK_NUM];   //Physical block addresses of inodes (0-9)
-    unsigned char padding[INODE_SIZE-74];            //used to make a power of 2
+    unsigned int mode,   //type of file (read, write, execute)
+		usr_id,    //user id
+		grp_id,     //group id
+		acc_time,  //access
+		chg_time,  //changed
+		mod_time,  //modify
+		inode_links,   //links to file
+		inode_size,    //size of file
+		inode_blocks,  //blocks number
+		inode_addresses[INODE_BLOCK_NUM];   //Physical block addresses of inodes (0-9)
+	unsigned char padding[INODE_SIZE-74];            //used to make a power of 2
 } Inode;
 
 //superblock structure
 typdef struct SuperBlock_t 
 {
-    unsigned int fsid;                  //filesystem ID
-    unsigned int blocks;                //total number of blocks
-    unsigned int root;                  //inode number of root directory
-    unsigned int inode_start;           //starting index of inode
-    unsigned int inode_blocks;          //number of inode blocks
-    unsigned int inode_bitmap_start;    //starting index of inode bitmap
-    unsigned int inode_bitmap_blocks;   //number of inode bitmap blocks
-    unsigned int data_start;            //starting index of data
-    unsigned int data_blocks;           //number of data blocks
+    unsigned int fsid,                  //filesystem ID
+		blocks,               //total number of blocks
+		root,                //inode number of root directory
+		inode_start,           //starting index of inode
+		inode_blocks,          //number of inode blocks
+		inode_bitmap_start,   //starting index of inode bitmap
+		inode_bitmap_blocks,   //number of inode bitmap blocks
+		data_start,           //starting index of data
+		data_blocks;           //number of data blocks
 } SuperBlock;
 
 ///////////////////////////////////////////////////////////
@@ -135,12 +135,12 @@ void *sfs_init(struct fuse_conn_info *conn)
         sup_blk.data_start = sup_blk.inode_bitmap_start + sup_blk.inode_bitmap_blocks;
         sup_blk.data_blocks = 0;
 
-        ino.inode_mode = S_IFDIR | S_IRWXU | S_IRWXG;
-        ino.inode_uid = getuid();
-        ino.inode_gid = getgid();
-        ino.inode_atime = time(NULL);
-        ino.inode_ctime = ino.inode_atime;
-        ino.inode_mtime = ino.inode_atime;
+        ino.mode = S_IFDIR | S_IRWXU | S_IRWXG;
+        ino.usr_id = getuid();
+        ino.grp_id = getgid();
+        ino.acc_time = time(NULL);
+        ino.chg_time = ino.acc_time;
+        ino.inode_mtime = ino.acc_time;
         ino.inode_links = 1;
         ino.inode_size = 0;
         ino.inode_blocks = 0;
@@ -204,12 +204,12 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 
 	if(strcmp("/", path) == 0)
 	{
-		statbuf->st_mode = root_ino.inode_mode;
-		statbuf->st_uid = root_ino.inode_uid;
-		statbuf->st_gid = root_ino.inode_gid;
+		statbuf->st_mode = root_ino.mode;
+		statbuf->st_uid = root_ino.usr_id;
+		statbuf->st_gid = root_ino.grp_id;
 		statbuf->st_rdev = 0;	//not part of our implementation
-		statbuf->st_atime = root_ino.inode_atime;
-		statbuf->st_ctime = root_ino.inode_ctime;
+		statbuf->st_atime = root_ino.acc_time;
+		statbuf->st_ctime = root_ino.chg_time;
 		statbuf->st_mtime = root_ino.inode_mtime;
 		statbuf->st_nlink = root_ino.inode_links;
 		statbuf->st_blocks = root_ino.inode_blocks;
@@ -236,12 +236,12 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 				memset(buf, 0, BLOCK_SIZE);
 				block_read(sup_blk.inode_start+(unsigned int)((entry[idx].d_ino)/INODES_PER_BLK), buf);
 				memcpy((void*)&ino, (void*)&((Inode *)buf)[(entry[idx].d_ino)%INODES_PER_BLK], sizeof(Inode));
-				statbuf->st_mode = root_ino.inode_mode;
-				statbuf->st_uid = root_ino.inode_uid;
-				statbuf->st_gid = root_ino.inode_gid;
+				statbuf->st_mode = root_ino.mode;
+				statbuf->st_uid = root_ino.usr_id;
+				statbuf->st_gid = root_ino.grp_id;
 				statbuf->st_rdev = 0;	//not part of our implementation
-				statbuf->st_atime = root_ino.inode_atime;
-				statbuf->st_ctime = root_ino.inode_ctime;
+				statbuf->st_atime = root_ino.acc_time;
+				statbuf->st_ctime = root_ino.chg_time;
 				statbuf->st_mtime = root_ino.inode_mtime;
 				statbuf->st_nlink = root_ino.inode_links;
 				statbuf->st_blocks = root_ino.inode_blocks;
@@ -361,12 +361,12 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
         else {
             // create this inode
             inodes_table[j].i_links = 1;
-            inodes_table[j].i_mode = S_IFREG | S_IRWXU | S_IRWXG;
-            inodes_table[j].i_uid = getuid();
-            inodes_table[j].i_gid = getgid();
-            inodes_table[j].i_atime = time(NULL);
-            inodes_table[j].i_ctime = inodes_table[j].i_atime;
-            inodes_table[j].i_mtime = inodes_table[j].i_atime;
+            inodes_table[j].mode = S_IFREG | S_IRWXU | S_IRWXG;
+            inodes_table[j].usr_id = getuid();
+            inodes_table[j].grp_id = getgid();
+            inodes_table[j].acc_time = time(NULL);
+            inodes_table[j].chg_time = inodes_table[j].acc_time;
+            inodes_table[j].i_mtime = inodes_table[j].acc_time;
             inodes_table[j].i_size = 0;
             inodes_table[j].i_blocks = 0;
             block_write(sup_blk.s_ino_start+(unsigned int)(j/INODES_PER_BLK), &inodes_data[BLOCK_SIZE*(unsigned int)(j/INODES_PER_BLK)]);
