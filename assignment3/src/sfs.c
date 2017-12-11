@@ -50,7 +50,7 @@
 //inode structure
 typedef struct Inode_t
 {
-    unsigned int mode,   //type of file (read, write, execute)
+	unsigned int mode,   //type of file (read, write, execute)
 		usr_id,    //user id
 		grp_id,     //group id
 		acc_time,  //access
@@ -66,7 +66,7 @@ typedef struct Inode_t
 //superblock structure
 typdef struct SuperBlock_t 
 {
-    unsigned int fsid,                  //filesystem ID
+	unsigned int fsid,                  //filesystem ID
 		blocks,               //total number of blocks
 		root,                //inode number of root directory
 		inode_start,           //starting index of inode
