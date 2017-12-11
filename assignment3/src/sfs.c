@@ -29,6 +29,20 @@
 
 #include "log.h"
 
+///////////////////
+// HELPER FUNCTIONS
+///////////////////
+
+void read_sup_blk_and_root_ino(struct superBlock* sup_blk, char[] buf, struct inode* root_ino)
+{
+	memset(buf, 0, BLOCK_SIZE);
+	block_read(0, buf);
+	memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
+	memset(buf, 0, BLOCK_SIZE);
+	block_read(sup_blk.inode_start, buf);
+	memcpy((void*)&root_ino, (void*)buf, sizeof(struct inode));
+}
+
 ///////////////////////////////////////////////////////////
 //
 // Prototypes for all these functions, and the C-style comments,
@@ -131,13 +145,15 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 	struct superBlock sup_blk;
 	struct inode root_ino, ino;
 	int num_entries, idx;
-
+/*
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(0, buf);
 	memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(sup_blk.inode_start, buf);
 	memcpy((void*)&root_ino, (void*)buf, sizeof(struct inode));
+	*/
+	read_sup_blk_and_root_ino(&sup_blk, buf, &root_ino);
 
 	if(strcmp("/", path) == 0)
 	{
@@ -248,7 +264,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
     struct dirent *entry;
     struct superblock sup_blk;
     struct inode root_ino, *inodes_table;
-    int num_ent, i, j, k, m, off, block_index;
+    int num_ent, i, j, k, m, off, blk_idx;
     u8 *byte;
 
     memset(buf, 0, BLOCK_SIZE);
@@ -317,7 +333,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
                 // find first free data block
                 memset(buf, 0, BLOCK_SIZE);
                 block_read(sup_blk.s_bitmap_start, buf);
-                block_index = sup_blk.s_data_start;
+                blk_idx = sup_blk.s_data_start;
                 for (k=0; k!=BLOCK_SIZE; ++k) {
                     byte = (u8 *) &buf[k];
                     for (m=0; m!=8;++m) {
@@ -326,11 +342,11 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
                             *byte |= 1 << m;
                             break;
                         }
-                        block_index++;
+                        blk_idx++;
                     }
                     if (m != 8) break;
                 }
-                root_ino.i_addresses[root_ino.i_blocks] = block_index;
+                root_ino.i_addresses[root_ino.i_blocks] = blk_idx;
                 block_write(sup_blk.s_bitmap_start, buf);
             }
 
