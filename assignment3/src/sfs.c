@@ -89,7 +89,7 @@ void *sfs_init(struct fuse_conn_info *conn)
         memcpy((void*)buffer, (void*)&ino, sizeof(struct inode));
         block_write(sb.inode_start, (void*)buffer);
     }else{
-        memcpy((void*)&sb, (void*)buffer, sizeof(struct suberBlock));
+        memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
         if(sb.fsid != FS_ID){
             //not our filesystem, overwrite?
         }
