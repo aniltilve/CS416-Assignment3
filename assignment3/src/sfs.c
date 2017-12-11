@@ -50,17 +50,17 @@
 //inode structure
 typedef struct Inode_t
 {
-	unsigned int mode,   //type of file (read, write, execute)
-		usr_id,    //user id
-		grp_id,     //group id
-		acc_time,  //access
-		chg_time,  //changed
-		mod_time,  //modify
-		num_links,   //links to file
-		file_sz,    //size of file
-		num_alloc_blks,  //blocks number
-		addrs[INODE_BLOCK_NUM];   //Physical block addresses of inodes (0-9)
-	unsigned char padding[INODE_SIZE-74];            //used to make a power of 2
+	unsigned int mode,   		//file permissions (read, write, execute)
+		usr_id,    		//user id
+		grp_id,     		//group id
+		acc_time,  		//access time
+		chg_time,  		//change time
+		mod_time,  		//modification time
+		num_links,   		//number of hard links to file
+		file_sz,    		//file size
+		num_alloc_blks,		//number of blocks allocated to the file
+		addrs[INODE_BLOCK_NUM];		//Pointers to file's data blocks
+	unsigned char padding[INODE_SIZE-74];   //Used to make this struct's size a power of 2
 } Inode;
 
 //superblock structure
