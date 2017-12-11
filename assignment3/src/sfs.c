@@ -29,18 +29,66 @@
 
 #include "log.h"
 
+/////////
+// MACROS
+/////////
+
+//size of disk
+//#define DISK 16777216 not necessary since we are using blocks as our granularity
+
+#define NUM_BLKS 2048  //number of blocks in our disk
+#define INODE_NUM 32    //number of inodes (can be altered)
+#define INODE_SIZE 128  //bytes
+#define I_NUM_PER_BLOCK (BLOCK_SIZE/INODE_SIZE) //number of inodes per block
+#define INODE_BLOCK_NUM 10 //last index value for inodes (inode index limit)
+#define FS_ID 0x0495 //unique filesystem identifier (check for this in init())
+
+//////////
+// STRUCTS
+//////////
+
+//inode structure
+typedef struct Inode_t
+{
+    unsigned int inode_mode;    //type of file (read, write, execute)
+    unsigned int inode_uid;     //user id
+    unsigned int inode_gid;     //group id
+    unsigned int inode_atime;   //access
+    unsigned int inode_ctime;   //changed
+    unsigned int inode_mtime;   //modify
+    unsigned int inode_links;   //links to file
+    unsigned int inode_size;    //size of file
+    unsigned int inode_blocks;  //blocks number
+    unsigned int inode_addresses[INODE_BLOCK_NUM];   //Physical block addresses of inodes (0-9)
+    unsigned char padding[INODE_SIZE-74];            //used to make a power of 2
+} Inode;
+
+//superblock structure
+typdef struct SuperBlock_t 
+{
+    unsigned int fsid;                  //filesystem ID
+    unsigned int blocks;                //total number of blocks
+    unsigned int root;                  //inode number of root directory
+    unsigned int inode_start;           //starting index of inode
+    unsigned int inode_blocks;          //number of inode blocks
+    unsigned int inode_bitmap_start;    //starting index of inode bitmap
+    unsigned int inode_bitmap_blocks;   //number of inode bitmap blocks
+    unsigned int data_start;            //starting index of data
+    unsigned int data_blocks;           //number of data blocks
+} SuperBlock;
+
 ///////////////////
 // HELPER FUNCTIONS
 ///////////////////
 
-void read_sup_blk_and_root_ino(struct superBlock* sup_blk, char[] buf, struct inode* root_ino)
+void read_sup_blk_and_root_ino(SuperBlock* sup_blk, char[] buf, Inode* root_ino)
 {
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(0, buf);
-	memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
+	memcpy((void*)&sup_blk, (void*)buf, sizeof(SuperBlock));
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(sup_blk.inode_start, buf);
-	memcpy((void*)&root_ino, (void*)buf, sizeof(struct inode));
+	memcpy((void*)&root_ino, (void*)buf, sizeof(Inode));
 }
 
 ///////////////////////////////////////////////////////////
@@ -70,17 +118,17 @@ void *sfs_init(struct fuse_conn_info *conn)
     
     char buf[BLOCK_SIZE];
     int ret; //bytes retrieved
-    struct superBlock sup_blk;
-    struct inode ino;
+    SuperBlock sup_blk;
+    Inode ino;
 
     memset(buf, 0, BLOCK_SIZE);
     disk_open(SFS_DATA->diskfile);
 
     if((ret=block_read(0, buf)) <= 0){
         sup_blk.fsid = FS_ID;
-        sup_blk.blocks = NUMBLOCKS;
+        sup_blk.blocks = NUM_BLKS;
         sup_blk.root = 0;
-        sup_blk.inode_start = (unsigned int)(sizeof(struct superBlock)/BLOCK_SIZE)+1;
+        sup_blk.inode_start = (unsigned int)(sizeof(SuperBlock)/BLOCK_SIZE)+1;
         sup_blk.inode_blocks = INODE_NUM/I_NUM_PER_BLOCK;
         sup_blk.inode_bitmap_start = sup_blk.inode_start + sup_blk.inode_blocks;
         sup_blk.inode_bitmap_blocks = 1;
@@ -98,13 +146,13 @@ void *sfs_init(struct fuse_conn_info *conn)
         ino.inode_blocks = 0;
 
         memset((void*)buf, 0, BLOCK_SIZE);
-        memcpy((void*)buf, (void*)&sup_blk, sizeof(struct superBlock));
+        memcpy((void*)buf, (void*)&sup_blk, sizeof(SuperBlock));
         block_write(0, (void*) buf);
         memset((void*)buf, 0, BLOCK_SIZE);
-        memcpy((void*)buf, (void*)&ino, sizeof(struct inode));
+        memcpy((void*)buf, (void*)&ino, sizeof(Inode));
         block_write(sup_blk.inode_start, (void*)buf);
     }else{
-        memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
+        memcpy((void*)&sup_blk, (void*)buf, sizeof(SuperBlock));
         if(sup_blk.fsid != FS_ID){
             //not our filesystem, overwrite?
         }
@@ -142,16 +190,16 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 	char buf[BLOCK_SIZE];
 	char *info;
 	struct dirent *entry;
-	struct superBlock sup_blk;
-	struct inode root_ino, ino;
+	SuperBlock sup_blk;
+	Inode root_ino, ino;
 	int num_entries, idx;
 /*
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(0, buf);
-	memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
+	memcpy((void*)&sup_blk, (void*)buf, sizeof(SuperBlock));
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(sup_blk.inode_start, buf);
-	memcpy((void*)&root_ino, (void*)buf, sizeof(struct inode));
+	memcpy((void*)&root_ino, (void*)buf, sizeof(Inode));
 	*/
 	read_sup_blk_and_root_ino(&sup_blk, buf, &root_ino);
 
@@ -188,7 +236,7 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 				//get this inode
 				memset(buf, 0, BLOCK_SIZE);
 				block_read(sup_blk.inode_start+(unsigned int)((entry[idx].d_ino)/I_NUM_PER_BLOCK), buf);
-				memcpy((void*)&ino, (void*)&((struct inode *)buf)[(entry[idx].d_ino)%I_NUM_PER_BLOCK], sizeof(struct inode));
+				memcpy((void*)&ino, (void*)&((Inode *)buf)[(entry[idx].d_ino)%I_NUM_PER_BLOCK], sizeof(Inode));
 				statbuf->st_mode = root_ino.inode_mode;
 				statbuf->st_uid = root_ino.inode_uid;
 				statbuf->st_gid = root_ino.inode_gid;
@@ -262,17 +310,17 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
 	
     char buf[BLOCK_SIZE], *data, *inodes_data;
     struct dirent *entry;
-    struct superblock sup_blk;
-    struct inode root_ino, *inodes_table;
+    SuperBlock sup_blk;
+    Inode root_ino, *inodes_table;
     int num_ent, i, j, k, m, off, blk_idx;
     u8 *byte;
 
     memset(buf, 0, BLOCK_SIZE);
     block_read(0, buf);
-    memcpy((void *)&sup_blk, (void *)buf, sizeof(struct superblock));
+    memcpy((void *)&sup_blk, (void *)buf, sizeof(SuperBlock));
     memset(buf, 0, BLOCK_SIZE);
     block_read(sup_blk.s_ino_start, buf);
-    memcpy((void *)&root_ino, (void *)buf, sizeof(struct inode));
+    memcpy((void *)&root_ino, (void *)buf, sizeof(Inode));
 
     // read all data of root directory
     data = malloc(BLOCK_SIZE * root_ino.i_blocks);
@@ -301,7 +349,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
             memcpy((void *)&inodes_data[BLOCK_SIZE*j], (void *)buf, BLOCK_SIZE);
         }
         // find first free inode
-        inodes_table = (struct inode *)inodes_data;
+        inodes_table = (Inode *)inodes_data;
         for (j=1; j != INODE_NUM; ++j) {
             if(inodes_table[j].i_links == 0) {
                 break;
@@ -372,10 +420,10 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
             //write root_ino and superblock back
             memset(buf, 0, BLOCK_SIZE);
             block_read(sup_blk.s_ino_start, buf);
-            memcpy((void *)buf, (void *)&root_ino, sizeof(struct inode));
+            memcpy((void *)buf, (void *)&root_ino, sizeof(Inode));
             block_write(sup_blk.s_ino_start, buf);
             memset(buf, 0, BLOCK_SIZE);
-            memcpy((void *)buf, (void *)&sup_blk, sizeof(struct superblock));
+            memcpy((void *)buf, (void *)&sup_blk, sizeof(SuperBlock));
             block_write(0, buf);
 
             free(entry);
@@ -522,7 +570,7 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
     int retstat = 0;
    
     struct superBlock sup_blk;
-    struct inode ino;
+    Inode ino;
     struct dirent* entry;
     char buf[BLOCK_SIZE], *info;
     int num_entries, idx;
@@ -533,7 +581,7 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
     memcpy((void*)&sup_blk, (void*)buf, sizeof(struct superBlock));
 
     block_read(sup_blk.inode_start, buf);
-    memcpy((void*)&ino, (void*)buf, sizeof(struct inode));
+    memcpy((void*)&ino, (void*)buf, sizeof(Inode));
 
     info = malloc(ino.inode_blocks * BLOCK_SIZE);
     memset(info, 0, ino.inode_blocks * BLOCK_SIZE);
