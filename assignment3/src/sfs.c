@@ -81,14 +81,14 @@ typdef struct SuperBlock_t
 // HELPER FUNCTIONS
 ///////////////////////////////////////////////////////////
 
-void read_sup_blk_and_root_ino(SuperBlock* sup_blk, char[] buf, Inode* root_ino)
+void read_sup_blk_and_root(SuperBlock* sup_blk, char[] buf, Inode* root)
 {
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(0, buf);
 	memcpy((void*)&sup_blk, (void*)buf, sizeof(SuperBlock));
 	memset(buf, 0, BLOCK_SIZE);
 	block_read(sup_blk.inode_start, buf);
-	memcpy((void*)&root_ino, (void*)buf, sizeof(Inode));
+	memcpy((void*)&root, (void*)buf, sizeof(Inode));
 }
 
 ///////////////////////////////////////////////////////////
@@ -200,7 +200,7 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 	block_read(sup_blk.inode_start, buf);
 	memcpy((void*)&root_ino, (void*)buf, sizeof(Inode));
 	*/
-	read_sup_blk_and_root_ino(&sup_blk, buf, &root_ino);
+	read_sup_blk_and_root(&sup_blk, buf, &root_ino);
 
 	if(strcmp("/", path) == 0)
 	{
@@ -313,13 +313,14 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
     Inode root_ino, *inodes_table;
     int num_ent, i, j, k, m, off, blk_idx;
     u8 *byte;
-
+/*
     memset(buf, 0, BLOCK_SIZE);
     block_read(0, buf);
     memcpy((void *)&sup_blk, (void *)buf, sizeof(SuperBlock));
     memset(buf, 0, BLOCK_SIZE);
     block_read(sup_blk.s_ino_start, buf);
-    memcpy((void *)&root_ino, (void *)buf, sizeof(Inode));
+    memcpy((void *)&root_ino, (void *)buf, sizeof(Inode)); */
+	read_sup_blk_and_root(&sup_blk, buf, &root_ino);
 
     // read all data of root directory
     data = malloc(BLOCK_SIZE * root_ino.num_alloc_blks);
