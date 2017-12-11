@@ -287,8 +287,56 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     int retstat = 0;
     log_msg("\nsfs_create(path=\"%s\", mode=0%03o, fi=0x%08x)\n",
 	    path, mode, fi);
-    
-    
+	    
+	 char fpath[PATH_MAX];
+	 char buf[BLOCK_SIZE], * info,*blockBitmap,*inodeBitmap;
+	 struct dirent *entry;
+	 SuperBlock sup_blk;
+	 Inode root_ino, ino;
+	 int num_ent, i;
+	 read_sup_blk_and_inode(&sup_blk, buf, &root_ino);
+    //see if path exists and create if not
+	 num_ent = root_ino.file_sz/sizeof(struct dirent);//number of enties
+	 entry = (struct dirent*) info;
+	 for(i = 0; i != num_ent; i++){//searches for inode
+		 if(strcmp(&path[1], entry[i].d_name) == 0){
+		 	 break;
+		 }
+	 }
+    if(i!=num_ent){//file exists
+    	  printf("File path (%s) exists already\n",path);
+    	  return retstat;
+    }
+    else{
+    	  //find an open block and inode
+    	  block_read(sup_blk.inode_bitmap_blocks,buf);//reads in data bitmap
+    	  memcpy(&blockBitmap,buf,BLOCK_SIZE);//copies bitmap to variable
+    	  for(i =0; i<NUM_BLKS ;i++){//finds open block
+    	  		if(blockBitmap[i]=='1'){//found a free block
+    	  			blockBitmap[i]='0';
+    	  		}
+    	  }
+    	  block_read(sup_blk.inode_bitmap_start,buf);//reads in inode bitmap
+    	  memcpy(&inodeBitmap,buf,BLOCK_SIZE);//copies bitmap to variable
+    	  for(j =0; i<NUM_BLKS ;j++){//finds open inode
+    	  		if(inodeBitmap[j]=='1'){//found a free inode
+    	  			inodeBitmap[j]='0';
+    	  		}
+    	  }
+    	  ino=
+    	  //create file
+    	  ino.mode = mode;
+        ino.usr_id = fi->uid;
+        ino.grp_id = fi->gid;
+        ino.acc_time = time(NULL);
+        ino.chg_time = inode.acc_time;
+        ino.mod_time = inode.acc_time;
+        ino.num_links = 1;
+        ino.file_sz = 0;
+        ino.num_alloc_blks = 1;
+    	  //update superblock and inode
+    	  sfs_open(path,fi);//open file
+    }
     return retstat;
 }
 
