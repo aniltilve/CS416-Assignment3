@@ -125,7 +125,7 @@ int sfs_getattr(const char *path, struct stat *statbuf)
     log_msg("\nsfs_getattr(path=\"%s\", statbuf=0x%08x)\n", path, statbuf);
 
 	char buffer[BLOCK_SIZE];
-	char *data;
+	char *info;
 	struct dirent *entry;
 	struct superBlock sb;
 	struct inode root_ino, ino;
@@ -150,16 +150,16 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 		statbuf->st_blocks = root_ino.inode_blocks;
 		statbuf->st_size = root_ino.inode_size;
 	}else{
-		data = (char*) malloc(BLOCK_SIZE * root_ino.inode_blocks);
+		info = (char*) malloc(BLOCK_SIZE * root_ino.inode_blocks);
 
 		for(i=0;(unsigned int) i != root_ino.inode_blocks; i++){
 			memset(buffer, 0, BLOCK_SIZE);
 			block_read(root_ino.inode_addresses[i], buffer);
-			memcpy((void*)&data[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+			memcpy((void*)&info[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
 		}
 
 		num_entries = root_ino.inode_size/sizeof(struct dirent);
-		entry = (struct dirent*) data;
+		entry = (struct dirent*) info;
 		for(i=0; i != num_entries; i++){
 			if(strcmp(&path[1], entry[i].d_name) == 0){
 				//get this inode
@@ -182,7 +182,7 @@ int sfs_getattr(const char *path, struct stat *statbuf)
 		if(i == num_entries){
 			statbuf->st_mode = S_IFREG | S_IRWXU | S_IRWXG;
 		}
-		free(data);
+		free(info);
 		
 	}
 
@@ -372,8 +372,37 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 	       struct fuse_file_info *fi)
 {
     int retstat = 0;
-    
-    
+   
+    struct superBlock sb;
+    struct inode ino;
+    struct dirent* entry;
+    char buffer[BLOCK_SIZE], *info;
+    int num_entries, i;
+
+    log_msg("\nreaddir begins\n");
+    memset(buffer, 0, BLOCK_SIZE);
+    block_read(0, buffer);
+    memcpy((void*)&sb, (void*)buffer, sizeof(struct superBlock));
+
+    block_read(sb.inode_start, buffer);
+    memcpy((void*)&ino, (void*)buffer, sizeof(struct inode));
+
+    info = malloc(ino.inode_blocks * BLOCK_SIZE);
+    memset(info, 0, ino.inode_blocks * BLOCK_SIZE);
+    for(i=0; i<ino.inode_blocks; i++){
+        block_read(ino.inode_addresses[i], buffer);
+        memcpy((void*)&info[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+    }
+    num_entries = ino.inode_size / sizeof(struct dirent);
+    entry = (struct dirent*) info;
+
+
+    for(i=0; i<num_entries; i++){
+        if(filler(buf, entry[i].d_name, NULL, 0)!=0 || i+1 == num_entries){
+            break;
+        }
+    }
+    free(info);
     return retstat;
 }
 
