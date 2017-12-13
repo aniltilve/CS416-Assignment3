@@ -700,7 +700,59 @@ int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
     log_msg("\nsfs_read(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
 	    path, buf, size, offset, fi);
 
-   
+    char buffer[BLOCK_SIZE];
+    char *data, *inode_data;
+    struct dirent *entry;
+    struct SuperBlock_t super_block;
+    struct Inode_t root_inode, inode;
+    int num_entries, i, j, num, off;
+
+    read_sup_blk_and_inode(super_block, buffer, inode);
+
+    data = malloc(BLOCK_SIZE * root_inode.num_alloc_blks);
+
+    for(i=0; i != root_inode.num_alloc_blks; ++i){
+        memset(buffer, 0, BLOCK_SIZE);
+        block_read(root_inode.disk_blks[i], buffer);
+        memcpy((void*)&data[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+    }
+
+    num_entries = root_inodes.file_sz/sizeof(struct dirent);
+    entry = (struct dirent*) data;
+    for(i=0; i != num_entries; ++i){
+        if(strcmp(&path[1], entry[i].d_name)==0){
+            break;
+        }
+    }
+
+    if(i == num_entries){
+        memset(buffer, 0, BLOCK_SIZE);
+        block_read(super_block.inode_start + (unsigned int)(entry[i].d_ino/INODES_PER_BLOCK), buffer);
+        memcpy((void*)&inode, (void*)&((struct Inode_t*)buffer)[entry[i].d_ino%INODES_PER_BLOCK], sizeof(struct Inode_t));
+
+        if(size<=inode.file_sz){
+            num = (unsigned int)(size/BLOCK_SIZE);
+            for(j=0; j!= num; ++j){
+                block_read(inode.disk_blks[j], buffer);
+                memcpy((void*)&buf[BLOCK_SIZE*j], buffer, BLOCK_SIZE);
+            }
+            retstat size;
+        }else{
+            off = inode.file_sz % BLOCK_SIZE;
+            num = inode.file_sz / BLOCK_SIZE;
+
+            for (j=0; j!=num;++j){
+                block_read(inode.disk_blks[j], buffer);
+                memcpy((void*)&buf[BLOCK_SIZE*j], buffer, BLOCK_SIZE);
+            }
+            if(off!= 0 ){
+                block_read(inode.disk_blks[j], buffer);
+                memcpy((void*)&buf[BLOCK_SIZE*j], buffer, off);
+            }
+            retstat = inode.file_sz;
+        }
+    }
+    free(data);
     return retstat;
 }
 
