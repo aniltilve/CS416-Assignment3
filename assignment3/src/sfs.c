@@ -299,9 +299,11 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     int num_ent, idx, j, k, m, off, blk_idx;
     u8 *byte;
     read_sup_blk_and_inode(&sup_blk, buf, &root);
+    
     //see if path exists and create if not
     num_ent = root.file_sz / sizeof(struct dirent); //number of enties
     entry = (struct dirent *)info;
+    
     for (idx = 0; idx != num_ent; idx++)
     { //searches for inode
         if (strcmp(&path[1], entry[idx].d_name) == 0)
@@ -309,16 +311,17 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
             break;
         }
     }
+    
     if (idx != num_ent)
     { //file exists
         printf("File path (%s) exists already\n", path);
+        fi->fh = idx;
         return retstat;
     }
     else
     {
-        /*
     	  //find an open block and inode
-    	  
+    	 /* 
     	  block_read(sup_blk.inode_bitmap_blocks,buf);//reads in data bitmap
     	  memcpy(&blockBitmap,buf,BLOCK_SIZE);//copies bitmap to variable
     	  for(idx =0; idx<NUM_BLKS ;idx++){//finds open block
@@ -335,7 +338,8 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     	  			inodeBitmap[j]='0';
     	  		}
     	  }
-    	  */
+          */ 
+          
         //create file
         if (idx == num_ent)
         {
@@ -591,102 +595,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
         }
     }
 
-    // this file doesn't exist, create
-    /*
-    if (i == num_ent) {
-        // read all inodes
-        inodes_data = malloc(BLOCK_SIZE * sup_blk.s_ino_blocks);
-        for (j=0; j != sup_blk.s_ino_blocks; ++j) {
-            memset(buf, 0, BLOCK_SIZE);
-            block_read(sup_blk.s_ino_start+j, buf);
-            memcpy((void *)&inodes_data[BLOCK_SIZE*j], (void *)buf, BLOCK_SIZE);
-        }
-        // find first free inode
-        inodes_table = (Inode *)inodes_data;
-        for (j=1; j != INODE_NUM; ++j) {
-            if(inodes_table[j].num_links == 0) {
-                break;
-            }
-        }
-        // if there is no more inode
-        if (j == INODE_NUM) {
-            retstat = -1;
-        }
-        else {
-            // create this inode
-            inodes_table[j].num_links = 1;
-            inodes_table[j].mode = S_IFREG | S_IRWXU | S_IRWXG;
-            inodes_table[j].usr_id = getuid();
-            inodes_table[j].grp_id = getgid();
-            inodes_table[j].acc_time = time(NULL);
-            inodes_table[j].chg_time = inodes_table[j].acc_time;
-            inodes_table[j].mod_time = inodes_table[j].acc_time;
-            inodes_table[j].file_sz = 0;
-            inodes_table[j].num_alloc_blks = 0;
-            block_write(sup_blk.s_ino_start+(unsigned int)(j/INODES_PER_BLK), &inodes_data[BLOCK_SIZE*(unsigned int)(j/INODES_PER_BLK)]);
-            // make a new entry
-            entry = (struct dirent *) malloc(sizeof(struct dirent));
-            entry->d_ino = sup_blk.s_root+j;
-            if (strlen(&path[1]) > 256) retstat = -1;
-            else memcpy(entry->d_name, &path[1], sizeof(path)-1);
-            // need a new block
-            if (root.file_sz + sizeof(struct dirent) > BLOCK_SIZE*root.num_alloc_blks) {
-                // find first free data block
-                memset(buf, 0, BLOCK_SIZE);
-                block_read(sup_blk.s_bitmap_start, buf);
-                blk_idx = sup_blk.s_data_bmp_start_idx;
-                for (k=0; k!=BLOCK_SIZE; ++k) {
-                    byte = (u8 *) &buf[k];
-                    for (m=0; m!=8;++m) {
-                        if ( ((*byte >> m) & 1) == 0 ) 
-			{
-                            *byte |= 1 << m;
-                            break;
-                        }
-                        blk_idx++;
-                    }
-                    if (m != 8) break;
-                }
-                root.disk_blks[root.num_alloc_blks] = blk_idx;
-                block_write(sup_blk.s_bitmap_start, buf);
-            }
-
-            // write this entry
-            off = root.num_alloc_blks * BLOCK_SIZE - root.file_sz;
-            if (off != 0) 
-	    {
-                memcpy(&data[root.file_sz], entry, off);
-                memcpy(&buf, &data[BLOCK_SIZE*(root.num_alloc_blks-1)], BLOCK_SIZE);
-                block_write(root.disk_blks[root.num_alloc_blks-1], buf);
-            }
-            if (off < sizeof(struct dirent)) 
-	    {
-                memset(buf, 0, BLOCK_SIZE);
-                memcpy((void *)buf, &((u8*)entry)[off], sizeof(struct dirent)-off);
-                block_write(root.disk_blks[root.num_alloc_blks], buf);
-            }
-
-            root.num_alloc_blks++;
-            sup_blk.s_ino_blocks++;
-            root.file_sz += sizeof(struct dirent);
-
-            //write root and superblock back
-            memset(buf, 0, BLOCK_SIZE);
-            block_read(sup_blk.s_ino_start, buf);
-            memcpy((void *)buf, (void *)&root, sizeof(Inode));
-            block_write(sup_blk.s_ino_start, buf);
-            memset(buf, 0, BLOCK_SIZE);
-            memcpy((void *)buf, (void *)&sup_blk, sizeof(SuperBlock));
-            block_write(0, buf);
-
-            free(entry);
-        }
-
-        free(inodes_data);
-    }
-
     free(data);
-    */
     return retstat;
 }
 
