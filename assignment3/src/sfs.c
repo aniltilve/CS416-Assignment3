@@ -40,7 +40,7 @@
 #define INODE_NUM 32                             //number of inodes (can be altered)
 #define INODE_SIZE 128                           //bytes
 #define INODES_PER_BLK (BLOCK_SIZE / INODE_SIZE) //number of inodes per block
-#define INODE_BLOCK_NUM 10                       //last index value for inodes (inode index limit)
+#define INODE_BLK_NUM 10                       //last index value for inodes (inode index limit)
 #define FILE_SYS_ID 0x0495                       //unique filesystem identifier (check for this in init())
 
 ///////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ typedef struct Inode_t
         num_links,                          // number of hard links to file
         file_sz,                            // file size
         num_alloc_blks,                     // number of blocks allocated to the file
-        disk_blks[INODE_BLOCK_NUM];         // disk pointers to file's data blocks
+        disk_blks[INODE_BLK_NUM];         // disk pointers to file's data blocks
     unsigned char padding[INODE_SIZE - 74]; // used to make this struct's size a power of 2
 } Inode;
 
@@ -71,9 +71,9 @@ typedef struct SuperBlock_t
         root,                 //inode number of root directory
         inode_start,          //starting index of inode
         inode_blocks,         //number of inode blocks
-        inode_bitmap_start,   //starting index of inode bitmap
+        inode_bmp_start_idx,   //starting index of inode bitmap
         inode_bitmap_blocks,  //number of inode bitmap blocks
-        data_start,           //starting index of data
+        data_bmp_start_idx,           //starting index of data
         data_blocks;          //number of data blocks
 } SuperBlock;
 
@@ -140,9 +140,9 @@ void *sfs_init(struct fuse_conn_info *conn)
         sup_blk.root = 0;
         sup_blk.inode_start = (unsigned int)(sizeof(SuperBlock) / BLOCK_SIZE) + 1;
         sup_blk.inode_blocks = INODE_NUM / INODES_PER_BLK;
-        sup_blk.inode_bitmap_start = sup_blk.inode_start + sup_blk.inode_blocks;
+        sup_blk.inode_bmp_start_idx = sup_blk.inode_start + sup_blk.inode_blocks;
         sup_blk.inode_bitmap_blocks = 1;
-        sup_blk.data_start = sup_blk.inode_bitmap_start + sup_blk.inode_bitmap_blocks;
+        sup_blk.data_bmp_start_idx = sup_blk.inode_bmp_start_idx + sup_blk.inode_bitmap_blocks;
         sup_blk.data_blocks = 0;
 
         inode.mode = S_IFDIR | S_IRWXU | S_IRWXG;
@@ -295,20 +295,20 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     struct dirent *entry;
     SuperBlock sup_blk;
     Inode root, *inodes_table;
-    int num_ent, i, j, k, m, off, blk_idx;
+    int num_ent, idx, j, k, m, off, blk_idx;
     u8 *byte;
     read_sup_blk_and_inode(&sup_blk, buf, &root);
     //see if path exists and create if not
     num_ent = root.file_sz / sizeof(struct dirent); //number of enties
     entry = (struct dirent *)info;
-    for (i = 0; i != num_ent; i++)
+    for (idx = 0; idx != num_ent; idx++)
     { //searches for inode
-        if (strcmp(&path[1], entry[i].d_name) == 0)
+        if (strcmp(&path[1], entry[idx].d_name) == 0)
         {
             break;
         }
     }
-    if (i != num_ent)
+    if (idx != num_ent)
     { //file exists
         printf("File path (%s) exists already\n", path);
         return retstat;
@@ -320,23 +320,23 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     	  
     	  block_read(sup_blk.inode_bitmap_blocks,buf);//reads in data bitmap
     	  memcpy(&blockBitmap,buf,BLOCK_SIZE);//copies bitmap to variable
-    	  for(i =0; i<NUM_BLKS ;i++){//finds open block
+    	  for(idx =0; idx<NUM_BLKS ;idx++){//finds open block
     	  
-    	  		if(blockBitmap[i]=='1'){//found a free block
-    	  			blockBitmap[i]='0';
+    	  		if(blockBitmap[idx]=='1'){//found a free block
+    	  			blockBitmap[idx]='0';
     	  		}
     	  		
     	  }
-    	  block_read(sup_blk.inode_bitmap_start,buf);//reads in inode bitmap
+    	  block_read(sup_blk.inode_bmp_start_idx,buf);//reads in inode bitmap
     	  memcpy(&inodeBitmap,buf,BLOCK_SIZE);//copies bitmap to variable
-    	  for(j =0; i<NUM_BLKS ;j++){//finds open inode
+    	  for(j =0; idx<NUM_BLKS ;j++){//finds open inode
     	  		if(inodeBitmap[j]=='1'){//found a free inode
     	  			inodeBitmap[j]='0';
     	  		}
     	  }
     	  */
         //create file
-        if (i == num_ent)
+        if (idx == num_ent)
         {
             // read all inodes
             inodes_data = malloc(BLOCK_SIZE * sup_blk.s_ino_blocks);
@@ -386,7 +386,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
                     // find first free data block
                     memset(buf, 0, BLOCK_SIZE);
                     block_read(sup_blk.s_bitmap_start, buf);
-                    blk_idx = sup_blk.s_data_start;
+                    blk_idx = sup_blk.data_bmp_start_idx;
                     for (k = 0; k != BLOCK_SIZE; ++k)
                     {
                         byte = (u8 *)&buf[k];
@@ -490,8 +490,8 @@ int sfs_unlink(const char *path)
 
         //read in specific inode
         memset(buf, 0, BLOCK_SIZE);
-        block_read(sb.inode_start + (u32)((entry.d_ino) / INODE_BLOCK_NUM), buf);
-        memcpy((void *)&ino, (void *)((Inode *)buf)[entry.d_ino / INODE_BLOCK_NUM], sizeof(Inode));
+        block_read(sb.inode_start + (u32)((entry.d_ino) / INODE_BLK_NUM), buf);
+        memcpy((void *)&ino, (void *)((Inode *)buf)[entry.d_ino / INODE_BLK_NUM], sizeof(Inode));
 
         //destroy file
         inodes_table[j].num_links = 0; //sets number of file links to 0
@@ -501,7 +501,7 @@ int sfs_unlink(const char *path)
         block_read(sup_blk.inode_bitmap_blocks, buf); //reads in data bitmap
         memcpy(&blockBitmap, buf, BLOCK_SIZE);        //copies bitmap to variable
 
-        for (i = 0; i < INODE_BLOCK_NUM; i++)
+        for (i = 0; i < INODE_BLK_NUM; i++)
         { //finds blocks and updates bitmap
             if (0 < ino.disk_blks[i] && ino.disk_blks[i] < NUM_BLKS)
             {
@@ -632,7 +632,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
                 // find first free data block
                 memset(buf, 0, BLOCK_SIZE);
                 block_read(sup_blk.s_bitmap_start, buf);
-                blk_idx = sup_blk.s_data_start;
+                blk_idx = sup_blk.s_data_bmp_start_idx;
                 for (k=0; k!=BLOCK_SIZE; ++k) {
                     byte = (u8 *) &buf[k];
                     for (m=0; m!=8;++m) {
@@ -728,8 +728,7 @@ int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
     log_msg("\nsfs_read(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
             path, buf, size, offset, fi);
 
-    char buf[BLOCK_SIZE];
-    char *data, *inode_data;
+    char buf[BLOCK_SIZE], *data, *inode_data;
     struct dirent *entry;
     SuperBlock super_block;
     struct Inode root, inode;
@@ -858,8 +857,8 @@ int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
         {
             //find a free data block
             memset(buf, 0, BLOCK_SIZE);
-            block_read(super_block.inode_bitmap_start, buf);
-            block_idx = super_block.data_start;
+            block_read(super_block.inode_bmp_start_idx, buf);
+            block_idx = super_block.data_bmp_start_idx;
 
             for (k = 0; k != BLOCK_SIZE; ++k)
             {
@@ -880,7 +879,7 @@ int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
                 }
             }
             inode.disk_blks[inode.num_alloc_blks] = block_idx;
-            block_write(super_block.inode_bitmap_start, buf);
+            block_write(super_block.inode_bmp_start_idx, buf);
 
             if (j != num - 1)
             {
