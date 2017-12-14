@@ -860,6 +860,7 @@ int sfs_opendir(const char *path, struct fuse_file_info *fi)
     int retstat = 0;
     log_msg("\nsfs_opendir(path=\"%s\", fi=0x%08x)\n",
             path, fi);
+    
 
     return retstat;
 }
