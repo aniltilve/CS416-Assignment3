@@ -1,0 +1,23 @@
+
+sfs_init()
+    conn:
+    proto_major = 7
+    proto_minor = 22
+    async_read = 1
+    max_write = 131072
+    max_readahead = 131072
+    capable = 00000ffb
+    want = 00000010
+    context:
+    fuse = 00ef54c0
+    uid = 0
+    gid = 0
+    pid = 0
+    private_data = 00ef5010
+    logfile = 00ef5030
+    diskfile = /tmp/mam1010/testfsfile
+    umask = 00000
+
+sfs_getattr(path="/.Trash", statbuf=0x63febc40)
+
+sfs_getattr(path="/.Trash-85696", statbuf=0x637eac40)
