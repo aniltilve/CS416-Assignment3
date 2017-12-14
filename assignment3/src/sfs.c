@@ -966,10 +966,9 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
  */
 int sfs_releasedir(const char *path, struct fuse_file_info *fi)
 {
-    int retstat = 0;
+    log_msg("\nReleasing %s ... \n",path); 
     
-    
-    return retstat;
+    return 0;
 }
 
 struct fuse_operations sfs_oper = {
