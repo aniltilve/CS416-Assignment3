@@ -495,7 +495,7 @@ int sfs_unlink(const char *path)
 
         //read in specific inode
         memset(buf, 0, BLOCK_SIZE);
-        block_read(sb.inode_start + (u32)((entry.d_ino) / INODE_BLK_NUM), buf);
+        block_read(sb.inode_start + (unsigned int)((entry.d_ino) / INODE_BLK_NUM), buf);
         memcpy((void *)&ino, (void *)((Inode *)buf)[entry.d_ino / INODE_BLK_NUM], sizeof(Inode));
 
         //destroy file
