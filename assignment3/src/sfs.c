@@ -289,15 +289,10 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
     int retstat = 0;
     log_msg("\nsfs_create(path=\"%s\", mode=0%03o, fi=0x%08x)\n",
-<<<<<<< HEAD
 	    path, mode, fi);
 	    
 	char buf[BLOCK_SIZE], *data, *inodes_data;
-=======
-            path, mode, fi);
 
-    char buf[BLOCK_SIZE], *data, *inodes_data;
->>>>>>> 8d02090126b3a28a5b7c34ed22f4e1c04a806879
     struct dirent *entry;
     SuperBlock sup_blk;
     Inode root, *inodes_table;
@@ -566,6 +561,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
     Inode root, *inodes_table;
     int num_ent, i, j, k, m, off, blk_idx;
     u8 *byte;
+    
     /*
     memset(buf, 0, BLOCK_SIZE);
     block_read(0, buf);
@@ -1026,12 +1022,8 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 int sfs_releasedir(const char *path, struct fuse_file_info *fi)
 {
     int retstat = 0;
-<<<<<<< HEAD
     
     
-=======
-
->>>>>>> 8d02090126b3a28a5b7c34ed22f4e1c04a806879
     return retstat;
 }
 
