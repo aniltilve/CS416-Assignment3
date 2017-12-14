@@ -292,12 +292,11 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 	    path, mode, fi);
 	    
 	char buf[BLOCK_SIZE], *data, *inodes_data;
-
     struct dirent *entry;
     SuperBlock sup_blk;
     Inode root, *inodes_table;
     int num_ent, idx, j, k, m, off, blk_idx;
-    u8 *byte;
+    unsigned char *byte;
     read_sup_blk_and_inode(&sup_blk, buf, &root);
     
     //see if path exists and create if not
@@ -343,6 +342,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
         //create file
         if (idx == num_ent)
         {
+            fi->fh = idx;
             // read all inodes
             inodes_data = malloc(BLOCK_SIZE * sup_blk.s_ino_blocks);
             for (j = 0; j != sup_blk.s_ino_blocks; ++j)
@@ -394,7 +394,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
                     blk_idx = sup_blk.data_bmp_start_idx;
                     for (k = 0; k != BLOCK_SIZE; ++k)
                     {
-                        byte = (u8 *)&buf[k];
+                        byte = (unsigned char *)&buf[k];
                         for (m = 0; m != 8; ++m)
                         {
                             if (((*byte >> m) & 1) == 0)
@@ -422,7 +422,7 @@ int sfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
                 if (off < sizeof(struct dirent))
                 {
                     memset(buf, 0, BLOCK_SIZE);
-                    memcpy((void *)buf, &((u8 *)entry)[off], sizeof(struct dirent) - off);
+                    memcpy((void *)buf, &((unsigned char*)entry)[off], sizeof(struct dirent) - off);
                     block_write(root.disk_blks[root.num_alloc_blks], buf);
                 }
 
@@ -464,7 +464,7 @@ int sfs_unlink(const char *path)
     SuperBlock sup_blk;
     Inode root, *inodes_table;
     int num_ent, i, j, k, m, off, blk_idx;
-    u8 *byte;
+    unsigned char *byte;
 
     //read in super block and inode sirectory
     read_sup_blk_and_inode(&sup_blk, buf, &root);
@@ -564,7 +564,7 @@ int sfs_open(const char *path, struct fuse_file_info *fi)
     SuperBlock sup_blk;
     Inode root, *inodes_table;
     int num_ent, i, j, k, m, off, blk_idx;
-    u8 *byte;
+    unsigned char *byte;
     
     /*
     memset(buf, 0, BLOCK_SIZE);
@@ -620,9 +620,12 @@ int sfs_release(const char *path, struct fuse_file_info *fi)
 	  path, fi);
 
     //remove any temporary data structures (file descriptor)    
-    if(fi->fh){
-        close(fi->fh);
+    if(fi->fh > 0 ){
+        fi->fh = -(fi->fh);
+    }else if(fi->fh ==0){
+        fi->fh = -1;
     }
+    
 
     return retstat;
 }
@@ -858,10 +861,37 @@ int sfs_rmdir(const char *path)
 int sfs_opendir(const char *path, struct fuse_file_info *fi)
 {
     int retstat = 0;
-    log_msg("\nsfs_opendir(path=\"%s\", fi=0x%08x)\n",
-            path, fi);
     
+    char buf[BLOCK_SIZE], *data, *inodes_data;
+    struct dirent *entry;
+    SuperBlock sup_blk;
+    Inode root, *inodes_table;
+    int num_ent, i;
+    
+    read_sup_blk_and_inode(&sup_blk, buf, &root);
 
+    // read all data of root directory
+    data = malloc(BLOCK_SIZE * root.num_alloc_blks);
+    for (i = 0; i != root.num_alloc_blks; ++i)
+    {
+        memset(buf, 0, BLOCK_SIZE);
+        block_read(root.disk_blks[i], buf);
+        memcpy((void *)&data[BLOCK_SIZE * i], (void *)buf, BLOCK_SIZE);
+    }
+
+    // find this dir
+    num_ent = root.file_sz / sizeof(struct dirent);
+    entry = (struct dirent *)data;
+    for (i = 0; i != num_ent; ++i)
+    {
+        if (strcmp(&path[1], entry[i].d_name) == 0)
+        {
+            log_msg("\nDEBUG: FOUND DIR: sfs_opendir(path=\"%s\", fi=0x%08x)\n", path, fi);
+            break;
+        }
+    }
+
+    free(data);
     return retstat;
 }
 
