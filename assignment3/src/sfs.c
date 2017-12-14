@@ -707,7 +707,7 @@ int sfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse
     struct Inode_t root_inode, inode;
     int num_entries, i, j, num, off;
 
-    read_sup_blk_and_inode(super_block, buffer, inode);
+    read_sup_blk_and_inode(&super_block, buffer, &root_inode);
 
     data = malloc(BLOCK_SIZE * root_inode.num_alloc_blks);
 
@@ -771,7 +771,99 @@ int sfs_write(const char *path, const char *buf, size_t size, off_t offset,
     log_msg("\nsfs_write(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n",
 	    path, buf, size, offset, fi);
     
-    
+    char buffer[BLOCK_SIZE];
+    char *data, *inode_data;
+    struct dirent *entry;
+    struct SuperBlock_t super_block;
+    struct Inode_t root_inode, inode;
+    int num_entries, i, j, k, l, shift, num, off, block_idx;
+    unsigned char *byte;
+
+    read_sup_blk_and_inode(&super_block, buffer, &root_inode);
+
+    data = malloc(BLOCK_SIZE * root_inode.num_alloc_blks);
+
+    for(i=0; i!=root_inode.num_alloc_blks; ++i){
+        memset(buffer, 0 , BLOCK_SIZE);
+        block_read(root_inode.disk_blks[i], buffer);
+        memcpy((void*)&data[BLOCK_SIZE*i], (void*)buffer, BLOCK_SIZE);
+    }
+
+    num_entries = root_inode.file_sz/sizeof(struct dirent);
+    entry = (struct dirent *) data;
+
+    for(i=0; i != num_entries; ++i){
+        if(strcmp(&path[1], entry[i].d_name) == 0){
+            break;
+        }
+    }
+
+    if(i != num_entries){
+        //get inode structure
+        memset(buffer, 0, BLOCK_SIZE);
+        block_read(super_block.inode_start + (unsigned int)((struct Inode_t*)buffer)[entry[i].d_ino%INODES_PER_BLK], sizeof(struct Inode_t));
+        //fill that last using blocks
+        off = inode.num_alloc_blks * BLOCK_SIZE - inode.file_sz;
+        if(off!=0){
+            memcpy(&buffer, &data[BLOCK_SIZE*(inode.num_alloc_blks-1)], BLOCK_SIZE);
+            memcpy(&buffer[BLOCK_SIZE-off], buf, off);
+            block_write(inode.disk_blks[inode.num_alloc_blks-1], buffer);
+        }
+        //how many new blocks needed
+        num = (unsigned int) ((size-off)/BLOCK_SIZE);
+        num += ((size-off)%BLOCK_SIZE == 0 ? 0 : 1);
+        //create num of new blocks
+        
+        for(j=0;j!=num;++j){
+            //find a free data block
+            memset(buffer, 0, BLOCK_SIZE);
+            block_read(super_block.inode_bitmap_start, buffer);
+            block_idx = super_block.data_start;
+
+            for(k=0;k!=BLOCK_SIZE;++k){
+                byte = (unsigned char*) &buffer[k];
+
+                for(shift=0; shift!=8; ++shift){
+                    if(((*byte >> shift) & 1) == 0){
+                        *byte |= 1 << shift;
+                        break;
+                    }
+                    block_idx++;
+                }
+                if(shift!=8){
+                    break;
+                }
+            }
+            inode.disk_blks[inode.num_alloc_blks] = block_idx;
+            block_write(super_block.inode_bitmap_start, buffer);
+            
+            if(j != num-1){
+                block_write(inode.disk_blks[inode.num_alloc_blks], &buf[off]);
+                off += BLOCK_SIZE;
+            }else{
+                memset(buffer, 0, BLOCK_SIZE);
+                memcpy(buffer, &buf[off], size-off);
+                block_write(inode.disk_blks[inode.num_alloc_blks], buffer);
+                off = size;
+            }
+            inode.num_alloc_blks++;
+            super_block.inode_blocks++;
+        }
+        inode.file_sz += size;
+
+        memset(buffer, 0, BLOCK_SIZE);
+        block_read(super_block.inode_start + (unsigned int)(entry[i].d_ino/INODES_PER_BLK), buffer);
+
+        memcpy((void*)&((struct Inode_t*)buffer)[entry[i].d_ino%INODES_PER_BLK], (void*)&ino, sizeof(struct Inode_t));
+        block_write(super_block.inode_start + (unsigned int)(entry[i].d_ino/INODES_PER_BLK), buffer);
+
+        memset(buffer, 0, BLOCK_SIZE);
+        memcpy((void*)buffer, (void*)&super_block, sizeof(struct SuperBlock_t));
+        block_write(0, buffer);
+
+
+    }
+    free(data);
     return retstat;
 }
 
