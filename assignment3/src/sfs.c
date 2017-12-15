@@ -934,7 +934,7 @@ int sfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offse
 
     log_msg("\nreaddir begins\n");
     memset(buff, 0, BLOCK_SIZE);
-    block_read(0, buf);
+    block_read(0, buff);
     memcpy((void *)&sup_blk, (void *)buff, sizeof(SuperBlock));
 
     block_read(sup_blk.inode_start, buff);
